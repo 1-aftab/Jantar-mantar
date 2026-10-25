@@ -3,7 +3,7 @@ const KEY = 'jantar-mantar-protest-mayhem-v1';
 export const defaultSave = () => ({
   completed: [],
   score: 0,
-  settings: { music: true, sfx: true, shake: true },
+  settings: { music: true, sfx: true, voice: true, shake: true },
   bestChaos: 0,
   seenIntro: false
 });
@@ -11,7 +11,8 @@ export const defaultSave = () => ({
 export function loadSave() {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...defaultSave(), ...JSON.parse(raw) } : defaultSave();
+    const stored = raw ? JSON.parse(raw) : null;
+    return stored ? { ...defaultSave(), ...stored, settings: { ...defaultSave().settings, ...stored.settings } } : defaultSave();
   } catch {
     return defaultSave();
   }
