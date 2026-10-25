@@ -162,7 +162,6 @@ export class GameScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(320, 810, 'player').setDepth(10).setCollideWorldBounds(true);
     this.player.body.setSize(28, 25).setOffset(10, 21);
     this.player.setData('label', 'You');
-    this.player.anims.create({ key: 'bounce', frames: [{ key: 'player' }], frameRate: 6, repeat: -1 });
   }
 
   createNPC(key, x, y, kind, name, text) {
