@@ -76,7 +76,7 @@ The web build has a relative Vite base (`./`) so it works from a GitHub Pages pr
 
 ## Android development
 
-Requirements: Node 22+ and a JDK 17 Android environment.
+Requirements: Node 22+ and a JDK 21 Android environment (required by the current Capacitor Android runtime).
 
 ```bash
 npm ci
