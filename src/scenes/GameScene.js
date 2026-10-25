@@ -65,21 +65,22 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setZoom(1.05);
     this.cameras.main.setBackgroundColor('#f6d98b');
 
-    this.input.keyboard.on('keydown-E', () => this.interact());
-    this.input.keyboard.on('keydown-SPACE', () => this.interact());
-    this.input.keyboard.on('keydown-F', () => this.dance());
+    this.input.keyboard.on('keydown-E', () => { this.enableAudio(); this.interact(); });
+    this.input.keyboard.on('keydown-SPACE', () => { this.enableAudio(); this.interact(); });
+    this.input.keyboard.on('keydown-F', () => { this.enableAudio(); this.dance(); });
     this.input.keyboard.on('keydown-ESC', () => this.togglePause());
+    // A first tap reliably unlocks WebAudio on Android / Safari. Control zones never trigger world actions.
     this.input.on('pointerdown', (pointer) => {
-      if (!pointer.wasTouch) return;
-      // A short tap in the play area is a contextual action on mobile.
-      if (pointer.duration < 220) this.interact();
+      this.enableAudio();
+      if (pointer.wasTouch && !this.isTouchControlArea(pointer)) this.interact();
     });
     this.events.on('mobile-action', (action) => {
+      this.enableAudio();
       if (action === 'interact') this.interact();
       if (action === 'dance') this.dance();
       if (action === 'pause') this.togglePause();
-      if (action === 'sprint') this.mobileSprint = !this.mobileSprint;
     });
+    this.events.on('mobile-sprint', (isDown) => { this.mobileSprint = isDown; });
     this.events.on('mobile-move', (movement) => { this.mobileMovement = movement; });
     this.events.on('select-mission', (id) => this.startMission(id));
     this.events.on('settings-changed', (settings) => {
@@ -102,23 +103,40 @@ export class GameScene extends Phaser.Scene {
   }
 
   drawGround() {
-    const g = this.add.graphics();
-    g.fillStyle(0xf6d98b).fillRect(0, 0, W, H);
-    g.fillStyle(0xe9cb7d).fillRoundedRect(80, 720, 2640, 230, 22);
-    g.fillStyle(0xe6c273).fillRoundedRect(1290, 80, 260, 1640, 22);
-    // hand-painted paving marks
-    for (let x = 120; x < W; x += 95) {
-      for (let y = 100; y < H; y += 85) {
-        const wobble = ((x * 7 + y * 3) % 5) * 0.02;
-        g.fillStyle(0xc99a5e, 0.11 + wobble).fillCircle(x + (y % 29), y, 2);
+    // Rich painted plate plus game-side marks keep the world detailed without any network assets.
+    this.add.image(W / 2, H / 2, 'plaza-bg').setDisplaySize(W, H).setDepth(-20);
+    const g = this.add.graphics().setDepth(-10);
+    g.fillStyle(0xf9d57d, .14).fillRect(0, 0, W, H);
+    g.fillStyle(0xd99a51, .22).fillRoundedRect(80, 720, 2640, 230, 30);
+    g.fillStyle(0xf6c96d, .15).fillRoundedRect(1290, 80, 260, 1640, 28);
+    g.lineStyle(5, 0x7c4c42, .16).strokeRoundedRect(80, 720, 2640, 230, 30);
+
+    // Mosaic pavers and colourful bunting are visual details, not collision geometry.
+    for (let x = 120; x < W; x += 96) {
+      for (let y = 100; y < H; y += 86) {
+        const tint = (x * 13 + y * 5) % 3 === 0 ? 0x804f43 : 0xffe7a4;
+        g.fillStyle(tint, .13).fillCircle(x + (y % 23), y + (x % 17), 2.8);
       }
     }
-    g.lineStyle(6, 0xd6aa68, 0.45).strokeRoundedRect(80, 720, 2640, 230, 22);
-    // stage carpet
-    g.fillStyle(0xce584c).fillRoundedRect(2180, 130, 420, 225, 18);
-    g.fillStyle(0xffdf79).fillRect(2205, 155, 370, 42);
-    g.fillStyle(0x5d3b43).fillRect(2220, 205, 335, 125);
-    this.add.text(2390, 170, 'SLOGAN STAGE', { fontFamily: 'sans-serif', fontSize: '24px', fontStyle: 'bold', color: '#5d3b43' }).setOrigin(.5).setDepth(1);
+    const bunting = [[180, 585, 1110, 520], [1590, 450, 2550, 560], [1870, 1150, 2670, 1000]];
+    const colours = [0xdf5550, 0x397cbc, 0xffc84d, 0x318b68, 0xa35bb0];
+    bunting.forEach(([x1, y1, x2, y2]) => {
+      g.lineStyle(2, 0x704144, .75).lineBetween(x1, y1, x2, y2);
+      const length = Phaser.Math.Distance.Between(x1, y1, x2, y2);
+      const pieces = Math.floor(length / 42);
+      for (let i = 1; i < pieces; i++) {
+        const t = i / pieces; const x = Phaser.Math.Linear(x1, x2, t); const y = Phaser.Math.Linear(y1, y2, t);
+        g.fillStyle(colours[i % colours.length], .9).fillTriangle(x - 7, y, x + 7, y, x, y + 14);
+      }
+    });
+    // Stage carpet, speakers, and a brass festival border.
+    g.fillStyle(0x59343f, .3).fillRoundedRect(2170, 120, 440, 245, 22);
+    g.fillStyle(0xc94f4d).fillRoundedRect(2180, 130, 420, 225, 18);
+    g.fillStyle(0xfbd46a).fillRoundedRect(2200, 151, 380, 48, 10);
+    g.fillStyle(0x483842).fillRoundedRect(2215, 205, 350, 125, 8);
+    g.fillStyle(0x2d2638).fillRoundedRect(2230, 225, 34, 72, 5).fillRoundedRect(2516, 225, 34, 72, 5);
+    g.fillStyle(0xf3b850).fillCircle(2247, 246, 7).fillCircle(2247, 274, 10).fillCircle(2533, 246, 7).fillCircle(2533, 274, 10);
+    this.add.text(2390, 171, 'SLOGAN STAGE', { fontFamily: 'sans-serif', fontSize: '24px', fontStyle: 'bold', color: '#593941', stroke: '#ffecad', strokeThickness: 3 }).setOrigin(.5).setDepth(1);
   }
 
   addSolid(key, x, y, label, scale = 1) {
@@ -235,6 +253,11 @@ export class GameScene extends Phaser.Scene {
     this.mobileSprint = false;
   }
 
+  isTouchControlArea(pointer) {
+    // UI uses a generous margin so an analogue drag never becomes an accidental interaction.
+    return (pointer.x < 360 && pointer.y > 360) || (pointer.x > 920 && pointer.y > 415) || (pointer.x > 1180 && pointer.y < 110);
+  }
+
   update(_, delta) {
     if (this.paused) return;
     this.updatePlayer(delta);
@@ -254,11 +277,13 @@ export class GameScene extends Phaser.Scene {
     if (this.hidden) { this.player.setVelocity(0); return; }
     let x = (this.keys.left.isDown ? -1 : 0) + (this.keys.right.isDown ? 1 : 0) + (this.keys.left2.isDown ? -1 : 0) + (this.keys.right2.isDown ? 1 : 0) + this.mobileMovement.x;
     let y = (this.keys.up.isDown ? -1 : 0) + (this.keys.down.isDown ? 1 : 0) + (this.keys.up2.isDown ? -1 : 0) + (this.keys.down2.isDown ? 1 : 0) + this.mobileMovement.y;
-    const moving = x !== 0 || y !== 0;
-    if (moving) { const len = Math.hypot(x, y); x /= len; y /= len; }
+    const rawLength = Math.hypot(x, y);
+    const intensity = Math.min(1, rawLength);
+    const moving = intensity > .01;
+    if (moving) { x /= rawLength; y /= rawLength; }
     const sprinting = (this.keys.sprint.isDown || this.mobileSprint) && moving && this.stamina > 1;
     const speed = sprinting ? 270 : 175;
-    this.player.setVelocity(x * speed, y * speed);
+    this.player.setVelocity(x * speed * intensity, y * speed * intensity);
     this.player.setFlipX(x < 0);
     if (sprinting) this.stamina = clamp(this.stamina - delta * .024, 0, 100);
     else this.stamina = clamp(this.stamina + delta * .017, 0, 100);
@@ -559,36 +584,58 @@ export class GameScene extends Phaser.Scene {
     } catch { return null; }
   }
 
-  playTone(frequency, duration, volume, type = 'triangle') {
+  enableAudio() {
+    try { if (this.sound.locked) this.sound.unlock(); } catch { /* WebAudio can be unavailable in a background tab */ }
     const ctx = this.audioContext();
     if (!ctx) return;
     try {
-      if (ctx.state === 'suspended') ctx.resume();
+      const resumed = ctx.state !== 'running' ? ctx.resume() : Promise.resolve();
+      resumed?.then?.(() => {
+        if (!this.audioAnnounced && (this.settings.music || this.settings.sfx)) {
+          this.audioAnnounced = true;
+          this.toast('🔊 Sound enabled — music and effects are live.');
+        }
+      });
+    } catch { /* a later pointer event will retry */ }
+    this.ensureMusic();
+  }
+
+  playTone(frequency, duration, volume, type = 'triangle', slideTo = null) {
+    const ctx = this.audioContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
       const osc = ctx.createOscillator(); const gain = ctx.createGain();
-      osc.frequency.value = frequency; osc.type = type;
-      gain.gain.setValueAtTime(volume, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + duration);
-      osc.connect(gain).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + duration);
-    } catch { /* audio may be unavailable until a user gesture */ }
+      osc.frequency.setValueAtTime(frequency, now);
+      if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, now + duration);
+      osc.type = type;
+      gain.gain.setValueAtTime(.0001, now);
+      gain.gain.exponentialRampToValueAtTime(volume, now + .012);
+      gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+      osc.connect(gain).connect(ctx.destination); osc.start(now); osc.stop(now + duration + .025);
+    } catch { /* audio is retried on the next player gesture */ }
   }
 
   ensureMusic() {
     if (!this.settings.music || this.musicBeat) return;
     const ctx = this.audioContext();
     if (!ctx) return;
-    const notes = [174.61, 220, 261.63, 220, 196, 220, 293.66, 261.63];
+    // A playful, more audible dhol-and-harmonium loop generated in WebAudio: no remote audio files.
+    const melody = [261.63, 329.63, 392, 329.63, 293.66, 349.23, 440, 392, 329.63, 293.66, 261.63, 293.66];
     let step = 0;
-    // A tiny procedurally generated dhol-like loop keeps the app offline and asset-free.
-    this.musicBeat = this.time.addEvent({ delay: 620, loop: true, callback: () => {
+    this.musicBeat = this.time.addEvent({ delay: 330, loop: true, callback: () => {
       if (!this.settings.music) return;
-      this.playTone(notes[step++ % notes.length], .34, .012, step % 4 === 0 ? 'sine' : 'triangle');
-      if (step % 2 === 0) this.playTone(87.31, .12, .009, 'sine');
+      const note = melody[step % melody.length];
+      this.playTone(note, .25, .035, step % 4 === 0 ? 'sine' : 'triangle');
+      if (step % 2 === 0) this.playTone(98, .13, .05, 'sine', 68);
+      if (step % 4 === 2) this.playTone(740, .055, .014, 'square', 500);
+      step++;
     } });
-    this.playTone(notes[0], .25, .012, 'sine');
+    this.playTone(melody[0], .24, .035, 'sine');
   }
 
   blip(frequency = 520) {
-    if (this.settings.sfx) this.playTone(frequency, .1, .035);
+    if (this.settings.sfx) this.playTone(frequency, .13, .075, 'triangle', frequency * 1.22);
   }
 
   togglePause() {

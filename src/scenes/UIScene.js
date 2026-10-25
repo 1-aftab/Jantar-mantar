@@ -171,34 +171,64 @@ export class UIScene extends Phaser.Scene {
   openHelp() {
     this.overlay.setVisible(true); this.clearPanel();
     this.panelText(0, -192, 'HOW TO CAUSE HELPFUL MAYHEM', { fontSize: '29px', fontStyle: 'bold', color: '#d5554e' });
-    this.panelText(0, -65, 'Move with WASD or arrow keys. Hold Shift to sprint, but watch stamina.\n\nPress E or Space beside people, supplies, barricades, bushes, and the Mission Board. Press F beside colourful crowd clusters to dance.\n\nHigher chaos brings funnier events — and longer police chases. Hide in the bush to lose patrols. Complete missions in order and your save stays on this device.', { fontSize: '19px', lineSpacing: 7 });
+    this.panelText(0, -65, 'Move with WASD or arrow keys. On mobile, drag anywhere in the large MOVE ring; hold RUN to sprint.\n\nTap once to enable music and effects, then use ACT beside people, supplies, barricades, bushes, and the Mission Board. Press F or DANCE beside colourful crowd clusters.\n\nHigher chaos brings funnier events — and longer police chases. Hide in the bush to lose patrols. Complete missions in order and your save stays on this device.', { fontSize: '19px', lineSpacing: 7 });
     this.panelButton(0, 180, 200, 47, 'GOT IT!', () => this.closeAll(), 0xe6814b, 19);
   }
 
   makeTouchControls() {
-    // They remain visible on desktop too, as a discoverable accessibility alternative.
-    this.touch = this.add.container(0, 0).setScrollFactor(0).setDepth(1500).setAlpha(.83);
-    const baseX = 112; const baseY = 575;
-    const base = this.add.circle(baseX, baseY, 58, 0x392b3c, .58).setStrokeStyle(3, 0xffdfa1, .8).setInteractive();
-    const stick = this.add.circle(baseX, baseY, 24, 0xffd267, .9).setStrokeStyle(2, 0x583d45, .8);
-    this.touch.add([base, stick]);
+    // A capture-based stick: it keeps tracking after the thumb leaves the ring, unlike a normal Phaser button.
+    this.touch = this.add.container(0, 0).setScrollFactor(0).setDepth(1500).setAlpha(.94);
+    const baseX = 132; const baseY = 574; const radius = 82; const deadZone = 13;
+    this.joystick = { baseX, baseY, radius, pointerId: null };
+    const halo = this.add.circle(baseX, baseY, radius + 10, 0xffd46d, .12).setStrokeStyle(2, 0xffedb0, .34);
+    const base = this.add.circle(baseX, baseY, radius, 0x252f52, .74).setStrokeStyle(5, 0xffdc7a, .95);
+    const inner = this.add.circle(baseX, baseY, 52, 0x4863a3, .28).setStrokeStyle(2, 0xd7ecff, .48);
+    const stick = this.add.circle(baseX, baseY, 32, 0xffc957, 1).setStrokeStyle(4, 0x4e3443, .9);
+    const glint = this.add.circle(baseX - 10, baseY - 11, 8, 0xffffff, .36);
+    const moveLabel = this.add.text(baseX, baseY + 108, 'MOVE', { fontFamily: 'sans-serif', fontSize: '15px', fontStyle: 'bold', color: '#fff3c6', stroke: '#422f42', strokeThickness: 3 }).setOrigin(.5);
+    this.touch.add([halo, base, inner, stick, glint, moveLabel]);
+    this.tweens.add({ targets: halo, scale: 1.08, alpha: .05, duration: 950, yoyo: true, repeat: -1 });
+
     const updateStick = (pointer) => {
-      const dx = pointer.x - baseX; const dy = pointer.y - baseY; const length = Math.hypot(dx, dy); const cap = Math.min(45, length); const nx = length ? dx / length : 0; const ny = length ? dy / length : 0;
-      stick.setPosition(baseX + nx * cap, baseY + ny * cap); this.play.events.emit('mobile-move', { x: nx, y: ny });
+      const dx = pointer.x - baseX; const dy = pointer.y - baseY; const length = Math.hypot(dx, dy);
+      const capped = Math.min(radius, length);
+      const ux = length ? dx / length : 0; const uy = length ? dy / length : 0;
+      stick.setPosition(baseX + ux * capped, baseY + uy * capped);
+      glint.setPosition(stick.x - 10, stick.y - 11);
+      const strength = length <= deadZone ? 0 : Math.min(1, (length - deadZone) / (radius - deadZone));
+      this.play.events.emit('mobile-move', { x: ux * strength, y: uy * strength });
     };
-    base.on('pointerdown', updateStick);
-    base.on('pointermove', (pointer) => { if (pointer.isDown) updateStick(pointer); });
-    base.on('pointerup', () => { stick.setPosition(baseX, baseY); this.play.events.emit('mobile-move', { x: 0, y: 0 }); });
-    this.input.on('pointerup', () => { stick.setPosition(baseX, baseY); this.play.events.emit('mobile-move', { x: 0, y: 0 }); });
-    const touchButton = (x, y, r, label, event, color) => {
-      const b = this.add.circle(x, y, r, color, .93).setStrokeStyle(3, 0x543744, .8).setInteractive();
-      const t = this.add.text(x, y, label, { fontFamily: 'sans-serif', fontSize: r > 35 ? '17px' : '14px', fontStyle: 'bold', color: '#fff6d6', align: 'center' }).setOrigin(.5);
-      b.on('pointerdown', () => { this.play.events.emit('mobile-action', event); b.setScale(.88); }); b.on('pointerup', () => b.setScale(1)); b.on('pointerout', () => b.setScale(1));
-      this.touch.add([b, t]);
+    const resetStick = () => {
+      this.joystick.pointerId = null;
+      this.tweens.add({ targets: [stick, glint], x: baseX, y: baseY, duration: 105, ease: 'Quad.out', onUpdate: (_, target) => {
+        if (target === glint) target.setPosition(stick.x - 10, stick.y - 11);
+      } });
+      this.play.events.emit('mobile-move', { x: 0, y: 0 });
     };
-    touchButton(1175, 578, 47, 'ACT\nE', 'interact', 0xe6814b);
-    touchButton(1085, 625, 39, 'DANCE\nF', 'dance', 0xd35b87);
-    touchButton(1228, 671, 31, 'RUN', 'sprint', 0x5d9a75);
-    touchButton(1240, 45, 25, 'II', 'pause', 0x4568ad);
+    this.input.on('pointerdown', (pointer) => {
+      if (this.overlay?.visible || this.joystick.pointerId !== null) return;
+      if (pointer.x < 340 && pointer.y > 390) { this.joystick.pointerId = pointer.id; updateStick(pointer); }
+    });
+    this.input.on('pointermove', (pointer) => { if (pointer.id === this.joystick.pointerId) updateStick(pointer); });
+    this.input.on('pointerup', (pointer) => { if (pointer.id === this.joystick.pointerId) resetStick(); });
+    this.input.on('pointerupoutside', (pointer) => { if (pointer.id === this.joystick.pointerId) resetStick(); });
+
+    const touchButton = (x, y, r, label, event, color, hold = false) => {
+      const c = this.add.container(x, y).setSize(r * 2, r * 2);
+      const ring = this.add.circle(0, 0, r + 6, 0xffffff, .14);
+      const b = this.add.circle(0, 0, r, color, .98).setStrokeStyle(4, 0x442d3d, .9).setInteractive({ useHandCursor: true });
+      const shine = this.add.circle(-r * .25, -r * .28, r * .23, 0xffffff, .18);
+      const t = this.add.text(0, 1, label, { fontFamily: 'sans-serif', fontSize: r > 42 ? '18px' : '15px', fontStyle: 'bold', color: '#fff9db', align: 'center', stroke: '#463044', strokeThickness: 2 }).setOrigin(.5);
+      c.add([ring, b, shine, t]); this.touch.add(c);
+      const release = () => { c.setScale(1); if (hold) this.play.events.emit('mobile-sprint', false); };
+      b.on('pointerdown', (pointer) => { pointer.event?.stopPropagation?.(); c.setScale(.87); if (hold) this.play.events.emit('mobile-sprint', true); else this.play.events.emit('mobile-action', event); });
+      b.on('pointerup', release); b.on('pointerout', release);
+      if (hold) this.input.on('pointerup', release);
+      return c;
+    };
+    touchButton(1165, 564, 58, 'ACT\nE', 'interact', 0xe6814b);
+    touchButton(1051, 630, 46, 'DANCE\nF', 'dance', 0xd04d83);
+    touchButton(1228, 661, 38, 'HOLD\nRUN', 'sprint', 0x398b70, true);
+    touchButton(1232, 53, 29, 'II', 'pause', 0x4568ad);
   }
 }
