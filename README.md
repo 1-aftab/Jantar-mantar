@@ -56,7 +56,7 @@ The game begins at the mission board in the south-west. All campaign objectives 
 - Inventory, score, stamina, collectibles, persistent campaign progress, mission tracker, speech bubbles, and funny Hinglish-flavoured dialogue.
 - Chaos meter that triggers random missing-chai, samosa, tourist, cameraman, and dance-circle events. High chaos expands police detection.
 - Patrol routes, pursuit, inexpensive steering-based obstacle avoidance, being caught, and a working hiding bush/escape path.
-- Subtle optional screen shake plus optional sound effects. Settings are stored locally.
+- Subtle optional screen shake, procedural ambient music, and sound effects. Settings are stored locally.
 
 ## Architecture
 

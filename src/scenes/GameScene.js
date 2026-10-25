@@ -82,7 +82,13 @@ export class GameScene extends Phaser.Scene {
     });
     this.events.on('mobile-move', (movement) => { this.mobileMovement = movement; });
     this.events.on('select-mission', (id) => this.startMission(id));
-    this.events.on('settings-changed', (settings) => { this.settings = settings; this.save.settings = settings; writeSave(this.save); });
+    this.events.on('settings-changed', (settings) => {
+      this.settings = settings;
+      this.save.settings = settings;
+      if (!settings.music && this.musicBeat) { this.musicBeat.remove(); this.musicBeat = null; }
+      if (settings.music) this.ensureMusic();
+      writeSave(this.save);
+    });
 
     this.time.delayedCall(500, () => {
       this.say(this.volunteer, "Welcome to Jantar Mantar! Visit the Mission Board, hero.");
@@ -363,6 +369,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   interact() {
+    this.ensureMusic();
     if (this.paused) return;
     if (this.hidden) { this.hidden = false; this.player.setVisible(true); this.toast('You step out. Try not to moonwalk into a patrol.'); return; }
     if (this.activeMission?.id === 'banner' && this.inventory.banner > 0 && distance(this.player.x, this.player.y, this.stageZone.x, this.stageZone.y) < 185) {
@@ -452,6 +459,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   dance() {
+    this.ensureMusic();
     if (this.paused || this.hidden) return;
     this.player.setTint(0xffdf6c);
     this.tweens.add({ targets: this.player, angle: 360, scaleX: 1.18, scaleY: 1.18, duration: 430, yoyo: true, onComplete: () => this.player.clearTint().setAngle(0).setScale(1) });
@@ -542,14 +550,45 @@ export class GameScene extends Phaser.Scene {
   toast(text) { this.currentMessage = text; this.events.emit('toast', text); }
   spark(x, y, quantity) { this.sparkEmitter.explode(quantity, x, y); if (this.settings.shake) this.cameras.main.shake(70, .002); }
 
-  blip(frequency = 520) {
-    if (!this.settings.sfx) return;
+  audioContext() {
+    if (this.audioCtx) return this.audioCtx;
     try {
-      const ctx = this.sound.context || new AudioContext();
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.audioCtx = this.sound.context || (AudioCtx ? new AudioCtx() : null);
+      return this.audioCtx;
+    } catch { return null; }
+  }
+
+  playTone(frequency, duration, volume, type = 'triangle') {
+    const ctx = this.audioContext();
+    if (!ctx) return;
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
       const osc = ctx.createOscillator(); const gain = ctx.createGain();
-      osc.frequency.value = frequency; osc.type = 'triangle'; gain.gain.setValueAtTime(.035, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + .09);
-      osc.connect(gain).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + .1);
-    } catch { /* mobile browsers can defer audio until a gesture */ }
+      osc.frequency.value = frequency; osc.type = type;
+      gain.gain.setValueAtTime(volume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + duration);
+      osc.connect(gain).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + duration);
+    } catch { /* audio may be unavailable until a user gesture */ }
+  }
+
+  ensureMusic() {
+    if (!this.settings.music || this.musicBeat) return;
+    const ctx = this.audioContext();
+    if (!ctx) return;
+    const notes = [174.61, 220, 261.63, 220, 196, 220, 293.66, 261.63];
+    let step = 0;
+    // A tiny procedurally generated dhol-like loop keeps the app offline and asset-free.
+    this.musicBeat = this.time.addEvent({ delay: 620, loop: true, callback: () => {
+      if (!this.settings.music) return;
+      this.playTone(notes[step++ % notes.length], .34, .012, step % 4 === 0 ? 'sine' : 'triangle');
+      if (step % 2 === 0) this.playTone(87.31, .12, .009, 'sine');
+    } });
+    this.playTone(notes[0], .25, .012, 'sine');
+  }
+
+  blip(frequency = 520) {
+    if (this.settings.sfx) this.playTone(frequency, .1, .035);
   }
 
   togglePause() {
