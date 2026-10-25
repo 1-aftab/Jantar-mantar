@@ -5,11 +5,14 @@ import { GameScene } from './scenes/GameScene.js';
 import { UIScene } from './scenes/UIScene.js';
 
 const config = {
-  type: Phaser.AUTO,
+  // Canvas keeps the app lightweight; a capped high-DPI backing store makes modern phones crisp without exhausting GPU memory.
+  type: Phaser.CANVAS,
   parent: 'game',
   backgroundColor: '#f6d98b',
   pixelArt: false,
   antialias: true,
+  resolution: Math.min(window.devicePixelRatio || 1, 2),
+  render: { antialias: true, roundPixels: false },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
