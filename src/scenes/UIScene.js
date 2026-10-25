@@ -158,12 +158,13 @@ export class UIScene extends Phaser.Scene {
     const settings = { ...this.play.settings };
     const refresh = () => {
       this.clearPanel();
-      this.panelText(0, -160, 'SETTINGS', { fontSize: '34px', fontStyle: 'bold', color: '#d5554e' });
-      [['music', 'MUSIC'], ['sfx', 'SOUND EFFECTS'], ['shake', 'SUBTLE SCREEN SHAKE']].forEach(([key, label], index) => {
-        this.panelText(-100, -74 + index * 65, label, { fontSize: '20px', fontStyle: 'bold' });
-        this.panelButton(155, -74 + index * 65, 150, 43, settings[key] ? 'ON' : 'OFF', () => { settings[key] = !settings[key]; this.play.events.emit('settings-changed', settings); refresh(); }, settings[key] ? 0x5d9a75 : 0x8b7d78, 18);
+      this.panelText(0, -190, 'SETTINGS', { fontSize: '34px', fontStyle: 'bold', color: '#d5554e' });
+      [['music', 'MUSIC'], ['sfx', 'SOUND EFFECTS'], ['voice', 'CHARACTER VOICES'], ['shake', 'SUBTLE SCREEN SHAKE']].forEach(([key, label], index) => {
+        const y = -112 + index * 62;
+        this.panelText(-100, y, label, { fontSize: '20px', fontStyle: 'bold' });
+        this.panelButton(155, y, 150, 43, settings[key] ? 'ON' : 'OFF', () => { settings[key] = !settings[key]; this.play.events.emit('settings-changed', settings); refresh(); }, settings[key] ? 0x5d9a75 : 0x8b7d78, 18);
       });
-      this.panelButton(0, 150, 170, 45, 'BACK', () => this.openPause(), 0x4568ad, 18);
+      this.panelButton(0, 175, 170, 45, 'BACK', () => this.openPause(), 0x4568ad, 18);
     };
     refresh();
   }

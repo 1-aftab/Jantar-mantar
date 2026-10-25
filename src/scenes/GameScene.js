@@ -41,6 +41,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, W, H);
     this.drawGround();
     this.solids = this.physics.add.staticGroup();
+    this.walls = this.physics.add.staticGroup();
     this.barriers = this.physics.add.group({ immovable: true, allowGravity: false });
     this.items = this.physics.add.group({ allowGravity: false, immovable: true });
     this.people = this.physics.add.group({ allowGravity: false, immovable: true });
@@ -54,10 +55,15 @@ export class GameScene extends Phaser.Scene {
     this.createWorldLabels();
     this.createParticles();
 
+    // Collision is deliberately layered: map structures, barriers, and people all block the player.
     this.physics.add.collider(this.player, this.solids);
+    this.physics.add.collider(this.player, this.walls);
     this.physics.add.collider(this.player, this.barriers);
+    this.physics.add.collider(this.player, this.people);
     this.physics.add.collider(this.police, this.solids);
+    this.physics.add.collider(this.police, this.walls);
     this.physics.add.collider(this.police, this.barriers);
+    this.physics.add.collider(this.police, this.people);
     this.physics.add.overlap(this.player, this.police, () => this.onCaught());
 
     this.cameras.main.setBounds(0, 0, W, H);
@@ -146,8 +152,27 @@ export class GameScene extends Phaser.Scene {
     return o;
   }
 
+  addWall(x, y, width, height, label = 'stone wall') {
+    // Visible, physical scene geometry. These prevent the painted environment from feeling like a walk-through backdrop.
+    const wall = this.add.rectangle(x, y, width, height, 0x6c4a43, .94).setStrokeStyle(3, 0xe0b46a, .9).setDepth(y / 100);
+    const inner = this.add.rectangle(x, y - Math.max(2, height * .12), Math.max(2, width - 8), Math.max(2, height * .26), 0xc88d57, .9).setDepth(wall.depth + .01);
+    this.physics.add.existing(wall, true);
+    wall.body.setSize(width, height);
+    wall.body.updateFromGameObject();
+    wall.setData('label', label);
+    this.walls.add(wall);
+    return { wall, inner };
+  }
+
   buildGround() {
-    // Fixed decorations and collision anchors.
+    // Fixed decorations and collision anchors. The perimeter and raised areas are real physics walls.
+    this.addWall(108, 900, 70, 1800, 'western boundary');
+    this.addWall(2692, 900, 70, 1800, 'eastern boundary');
+    this.addWall(1400, 80, 2800, 70, 'northern boundary');
+    this.addWall(1400, 1735, 2800, 70, 'southern boundary');
+    this.addWall(2390, 300, 340, 82, 'raised stage');
+    this.addWall(1020, 595, 240, 28, 'garden curb');
+    this.addWall(1750, 1165, 260, 28, 'garden curb');
     [[350, 420], [650, 390], [960, 270], [230, 1160], [630, 1430], [1060, 1510], [1530, 1370], [1940, 1510], [2600, 1310], [2670, 550], [1810, 420]].forEach(([x, y]) => this.addSolid('tree', x, y, 'tree'));
     [[350, 260], [530, 270], [815, 420], [970, 430], [420, 1390], [760, 1370], [1550, 1210], [1870, 1290]].forEach(([x, y], i) => this.addSolid('tent', x, y, `tent ${i + 1}`));
     this.addSolid('stall', 900, 930, 'Snack Stall');
@@ -340,7 +365,7 @@ export class GameScene extends Phaser.Scene {
     // small steering offset gives patrols a practical, cheap obstacle avoidance behaviour.
     const aheadX = officer.x + Math.sign(dx) * 24;
     const aheadY = officer.y + Math.sign(dy) * 24;
-    this.solids.getChildren().concat(this.barriers.getChildren()).forEach((wall) => {
+    this.solids.getChildren().concat(this.walls.getChildren(), this.barriers.getChildren()).forEach((wall) => {
       if (distance(aheadX, aheadY, wall.x, wall.y) < 55) { dx += (officer.y - wall.y) * 1.6; dy += (wall.x - officer.x) * 1.6; }
     });
     const length = Math.hypot(dx, dy) || 1;
@@ -569,11 +594,36 @@ export class GameScene extends Phaser.Scene {
     if (npc.bubble) npc.bubble.destroy();
     const bubble = this.add.text(npc.x, npc.y - 48, text, { fontFamily: 'sans-serif', fontSize: '15px', color: '#432d3d', backgroundColor: '#fff4d3', padding: { x: 9, y: 6 }, wordWrap: { width: 210 }, align: 'center' }).setOrigin(.5, 1).setDepth(100);
     npc.bubble = bubble;
+    this.characterVocal(npc);
+    this.speakDialogue(npc, text);
     this.tweens.add({ targets: bubble, y: bubble.y - 10, alpha: 0, delay: 2800, duration: 350, onComplete: () => bubble.destroy() });
   }
 
   toast(text) { this.currentMessage = text; this.events.emit('toast', text); }
   spark(x, y, quantity) { this.sparkEmitter.explode(quantity, x, y); if (this.settings.shake) this.cameras.main.shake(70, .002); }
+
+  characterVocal(npc) {
+    if (!this.settings.sfx || !this.audioReady) return;
+    const pitch = { volunteer: 320, hungry: 210, sleepy: 165, tourist: 390, chaiUncle: 245, dancer: 460, police: 185 }[npc.getData('kind')] || 290;
+    const syllables = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < syllables; i++) {
+      this.time.delayedCall(i * 78, () => this.playTone(pitch * (i % 2 ? 1.16 : .92), .065, .075, i % 2 ? 'square' : 'triangle', pitch * 1.02));
+    }
+  }
+
+  speakDialogue(npc, text) {
+    // Device TTS supplies clear character speech offline where the platform supports it; chirps above remain the fallback.
+    if (!this.settings.voice || !this.audioReady || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-IN';
+      utterance.rate = npc.getData('kind') === 'sleepy' ? .78 : npc.getData('kind') === 'dancer' ? 1.12 : .94;
+      utterance.pitch = npc.getData('kind') === 'chaiUncle' ? .72 : npc.getData('kind') === 'dancer' ? 1.28 : 1;
+      utterance.volume = .9;
+      window.speechSynthesis.speak(utterance);
+    } catch { /* use the procedural character vocal fallback */ }
+  }
 
   audioContext() {
     if (this.audioCtx) return this.audioCtx;
@@ -591,6 +641,7 @@ export class GameScene extends Phaser.Scene {
     try {
       const resumed = ctx.state !== 'running' ? ctx.resume() : Promise.resolve();
       resumed?.then?.(() => {
+        this.audioReady = true;
         if (!this.audioAnnounced && (this.settings.music || this.settings.sfx)) {
           this.audioAnnounced = true;
           this.toast('🔊 Sound enabled — music and effects are live.');
