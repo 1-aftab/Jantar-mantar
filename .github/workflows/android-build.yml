@@ -45,7 +45,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          excerpt="$(tail -n 100 "$RUNNER_TEMP/protest-mayhem-gradle.log")"
+          # Prefer Gradle's concise failure block; retain a short tail only if it is absent.
+          excerpt="$(grep -i -E -A 22 -B 3 'FAILURE: Build failed|What went wrong|Execution failed|^\* Exception|^.*error:.*' "$RUNNER_TEMP/protest-mayhem-gradle.log" | tail -n 180)"
+          if [ -z "$excerpt" ]; then excerpt="$(tail -n 180 "$RUNNER_TEMP/protest-mayhem-gradle.log")"; fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
             -f name='Android Gradle diagnostic' \
             -f head_sha="$GITHUB_SHA" \
