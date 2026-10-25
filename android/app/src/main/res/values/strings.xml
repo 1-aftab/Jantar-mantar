@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Jantar Mantar: Protest Mayhem</string>
+    <string name="title_activity_main">Jantar Mantar: Protest Mayhem</string>
+    <string name="package_name">com.aftab.protestmayhem</string>
+    <string name="custom_url_scheme">com.aftab.protestmayhem</string>
+</resources>

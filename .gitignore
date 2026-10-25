@@ -1,0 +1,27 @@
+# JavaScript
+node_modules/
+dist/
+.npm/
+
+# Environment and editor files
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+
+# Android / Gradle build outputs
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+*.keystore
+*.jks
+android/app/release.keystore
+
+# Capacitor generated native web assets are rebuilt by cap sync
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
